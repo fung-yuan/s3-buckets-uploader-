@@ -25,6 +25,13 @@ export default function AutomateTab({ settings, saveSettings }) {
   const [log, setLog] = useState([])
   const logRef = useRef(null)
 
+  const [connStatus, setConnStatus] = useState(null)
+  const [testing, setTesting] = useState(false)
+
+  const [redirectEnabled, setRedirectEnabled] = useState(false)
+  const [redirectUrl, setRedirectUrl] = useState('')
+  const [redirectDelay, setRedirectDelay] = useState(0)
+
   useEffect(() => {
     if (settings.bucketUrl) setBucketUrl(settings.bucketUrl)
   }, [settings.bucketUrl])
@@ -58,10 +65,24 @@ export default function AutomateTab({ settings, saveSettings }) {
     return `~${(mins / 60).toFixed(1)} hrs`
   }
 
+  const handleTestConnection = async () => {
+    if (!bucketUrl) return
+    setTesting(true)
+    setConnStatus(null)
+    const result = await window.electron.testConnection(bucketUrl)
+    setConnStatus(result)
+    setTesting(false)
+  }
+
   const handleStart = async () => {
     if (!bucketUrl) return
     setLog([])
     setRunning(true)
+
+    const redirect = redirectEnabled && redirectUrl
+      ? { enabled: true, url: redirectUrl, delay: redirectDelay }
+      : { enabled: false }
+
     const result = await window.electron.startAutomation({
       bucketUrl,
       slugPattern,
@@ -69,6 +90,7 @@ export default function AutomateTab({ settings, saveSettings }) {
       keywords: kwList,
       count: parseInt(count) || 1,
       intervalMin: parseFloat(intervalMin) || 1,
+      redirect,
     })
     if (result?.error) {
       setRunning(false)
@@ -84,6 +106,9 @@ export default function AutomateTab({ settings, saveSettings }) {
 
   const copyUrl = (url) => window.electron.copyToClipboard(url)
 
+  const connOk = connStatus?.reachable && connStatus?.writable
+  const connWarn = connStatus?.reachable && !connStatus?.writable
+
   return (
     <main className="tab-content auto-tab">
       <div className="auto-layout">
@@ -91,17 +116,35 @@ export default function AutomateTab({ settings, saveSettings }) {
         {/* LEFT — config */}
         <div className="auto-left">
           <div className="card">
-            <div className="field">
-              <label>BUCKET URL</label>
-              <input
-                type="text"
-                placeholder="https://your-bucket.s3.amazonaws.com"
-                value={bucketUrl}
-                onChange={(e) => setBucketUrl(e.target.value)}
-              />
+            <div className="field-row">
+              <div className="field grow">
+                <label>BUCKET URL</label>
+                <input
+                  type="text"
+                  placeholder="https://your-bucket.s3.amazonaws.com"
+                  value={bucketUrl}
+                  onChange={(e) => { setBucketUrl(e.target.value); setConnStatus(null) }}
+                />
+              </div>
+              <div className="field-btn-wrap">
+                <button className="test-btn" onClick={handleTestConnection} disabled={!bucketUrl || testing}>
+                  {testing ? 'Testing…' : 'Test ↗'}
+                </button>
+              </div>
             </div>
 
-            <div className="field">
+            {connStatus && (
+              <div className={`conn-status ${connOk ? 'ok' : connWarn ? 'warn' : 'bad'}`}>
+                {connStatus.reachable
+                  ? connStatus.writable
+                    ? '✓ Reachable · ✓ Writable'
+                    : `✓ Reachable · ✗ ${connStatus.error || 'Not writable'}`
+                  : `✗ ${connStatus.error || 'Cannot reach bucket'}`
+                }
+              </div>
+            )}
+
+            <div className="field" style={{ marginTop: '12px' }}>
               <label>SLUG PATTERN</label>
               <input
                 type="text"
@@ -172,6 +215,67 @@ export default function AutomateTab({ settings, saveSettings }) {
               </span>
             </div>
           </div>
+
+          <div className={`card redirect-card ${redirectEnabled ? 'redirect-active' : ''}`}>
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={redirectEnabled}
+                onChange={(e) => setRedirectEnabled(e.target.checked)}
+              />
+              <span className="toggle-text">Inject redirect into each upload</span>
+            </label>
+
+            {redirectEnabled && (
+              <div className="redirect-body">
+                <div className="field">
+                  <label>REDIRECT TO</label>
+                  <input
+                    type="text"
+                    placeholder="https://example.com"
+                    value={redirectUrl}
+                    onChange={(e) => setRedirectUrl(e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label>TIMING</label>
+                  <div className="timing-row">
+                    <label className="radio-opt">
+                      <input
+                        type="radio"
+                        name="auto-rt"
+                        checked={redirectDelay === 0}
+                        onChange={() => setRedirectDelay(0)}
+                      />
+                      Instant
+                    </label>
+                    <label className="radio-opt">
+                      <input
+                        type="radio"
+                        name="auto-rt"
+                        checked={redirectDelay > 0}
+                        onChange={() => setRedirectDelay((prev) => prev || 3)}
+                      />
+                      After
+                    </label>
+                    {redirectDelay > 0 && (
+                      <>
+                        <input
+                          type="number"
+                          className="delay-num"
+                          min="1"
+                          max="60"
+                          value={redirectDelay}
+                          onChange={(e) => setRedirectDelay(Math.max(1, parseInt(e.target.value) || 1))}
+                        />
+                        <span className="delay-unit">seconds</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* RIGHT — log + controls */}
@@ -186,7 +290,7 @@ export default function AutomateTab({ settings, saveSettings }) {
 
             <div className="log-body" ref={logRef}>
               {log.length === 0 && (
-                <p className="log-empty">Uploads will appear here in real time...</p>
+                <p className="log-empty">Uploads will appear here in real time…</p>
               )}
               {log.map((entry, i) => (
                 <div key={i} className={`log-entry ${entry.type === 'progress' && !entry.success ? 'fail' : entry.type}`}>
@@ -231,7 +335,7 @@ export default function AutomateTab({ settings, saveSettings }) {
               ) : (
                 <div className="running-row">
                   <span className="pulse-dot" />
-                  <span className="running-label">Running...</span>
+                  <span className="running-label">Running…</span>
                   <button className="stop-btn" onClick={handleStop}>Stop</button>
                 </div>
               )}

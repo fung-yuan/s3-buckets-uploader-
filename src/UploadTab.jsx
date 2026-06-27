@@ -40,6 +40,13 @@ export default function UploadTab({ settings, saveSettings }) {
   const [bucketSaved, setBucketSaved] = useState(false)
   const [dragging, setDragging] = useState(false)
 
+  const [connStatus, setConnStatus] = useState(null)
+  const [testing, setTesting] = useState(false)
+
+  const [redirectEnabled, setRedirectEnabled] = useState(false)
+  const [redirectUrl, setRedirectUrl] = useState('')
+  const [redirectDelay, setRedirectDelay] = useState(0)
+
   useEffect(() => {
     if (settings.bucketUrl) setBucketUrl(settings.bucketUrl)
   }, [settings.bucketUrl])
@@ -54,6 +61,15 @@ export default function UploadTab({ settings, saveSettings }) {
     saveSettings({ bucketUrl })
     setBucketSaved(true)
     setTimeout(() => setBucketSaved(false), 2000)
+  }
+
+  const handleTestConnection = async () => {
+    if (!bucketUrl) return
+    setTesting(true)
+    setConnStatus(null)
+    const result = await window.electron.testConnection(bucketUrl)
+    setConnStatus(result)
+    setTesting(false)
   }
 
   const handleCopyUrl = async () => {
@@ -96,12 +112,17 @@ export default function UploadTab({ settings, saveSettings }) {
     setUploading(true)
     setStatus(null)
 
+    const redirect = redirectEnabled && redirectUrl
+      ? { enabled: true, url: redirectUrl, delay: redirectDelay }
+      : { enabled: false }
+
     const result = await window.electron.upload({
       url,
       contentType,
       isFile: mode === 'file',
       content: mode === 'text' ? textContent : null,
       filePath: mode === 'file' ? selectedFile.path : null,
+      redirect,
     })
 
     setUploading(false)
@@ -112,6 +133,10 @@ export default function UploadTab({ settings, saveSettings }) {
       setStatus({ type: 'error', message: result.error || `HTTP ${result.status}: ${result.body?.slice(0, 200)}` })
     }
   }
+
+  const showRedirect = contentType === 'text/html'
+  const connOk = connStatus?.reachable && connStatus?.writable
+  const connWarn = connStatus?.reachable && !connStatus?.writable
 
   return (
     <main
@@ -137,7 +162,7 @@ export default function UploadTab({ settings, saveSettings }) {
               type="text"
               placeholder="https://your-bucket.s3.amazonaws.com"
               value={bucketUrl}
-              onChange={(e) => setBucketUrl(e.target.value)}
+              onChange={(e) => { setBucketUrl(e.target.value); setConnStatus(null) }}
             />
           </div>
           <div className="field-btn-wrap">
@@ -145,9 +170,25 @@ export default function UploadTab({ settings, saveSettings }) {
               {bucketSaved ? '✓ Saved' : 'Save'}
             </button>
           </div>
+          <div className="field-btn-wrap">
+            <button className="test-btn" onClick={handleTestConnection} disabled={!bucketUrl || testing}>
+              {testing ? 'Testing…' : 'Test ↗'}
+            </button>
+          </div>
         </div>
 
-        <div className="field-row">
+        {connStatus && (
+          <div className={`conn-status ${connOk ? 'ok' : connWarn ? 'warn' : 'bad'}`}>
+            {connStatus.reachable
+              ? connStatus.writable
+                ? '✓ Reachable · ✓ Writable'
+                : `✓ Reachable · ✗ ${connStatus.error || 'Not writable'}`
+              : `✗ ${connStatus.error || 'Cannot reach bucket'}`
+            }
+          </div>
+        )}
+
+        <div className="field-row" style={{ marginTop: '12px' }}>
           <div className="field grow">
             <label>FILE PATH (KEY)</label>
             <input
@@ -214,8 +255,71 @@ export default function UploadTab({ settings, saveSettings }) {
         )}
       </div>
 
+      {showRedirect && (
+        <div className={`card redirect-card ${redirectEnabled ? 'redirect-active' : ''}`}>
+          <label className="toggle-row">
+            <input
+              type="checkbox"
+              checked={redirectEnabled}
+              onChange={(e) => setRedirectEnabled(e.target.checked)}
+            />
+            <span className="toggle-text">Enable redirect</span>
+          </label>
+
+          {redirectEnabled && (
+            <div className="redirect-body">
+              <div className="field">
+                <label>REDIRECT TO</label>
+                <input
+                  type="text"
+                  placeholder="https://example.com"
+                  value={redirectUrl}
+                  onChange={(e) => setRedirectUrl(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>TIMING</label>
+                <div className="timing-row">
+                  <label className="radio-opt">
+                    <input
+                      type="radio"
+                      name="upload-rt"
+                      checked={redirectDelay === 0}
+                      onChange={() => setRedirectDelay(0)}
+                    />
+                    Instant
+                  </label>
+                  <label className="radio-opt">
+                    <input
+                      type="radio"
+                      name="upload-rt"
+                      checked={redirectDelay > 0}
+                      onChange={() => setRedirectDelay((prev) => prev || 3)}
+                    />
+                    After
+                  </label>
+                  {redirectDelay > 0 && (
+                    <>
+                      <input
+                        type="number"
+                        className="delay-num"
+                        min="1"
+                        max="60"
+                        value={redirectDelay}
+                        onChange={(e) => setRedirectDelay(Math.max(1, parseInt(e.target.value) || 1))}
+                      />
+                      <span className="delay-unit">seconds</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <button className="upload-btn" onClick={handleUpload} disabled={uploading}>
-        {uploading ? 'Uploading...' : 'Upload to S3'}
+        {uploading ? 'Uploading…' : 'Upload to S3'}
       </button>
 
       {status && (

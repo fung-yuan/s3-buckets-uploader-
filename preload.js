@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electron', {
   upload: (params) => ipcRenderer.invoke('upload', params),
+  testConnection: (url) => ipcRenderer.invoke('test-connection', url),
   openFileDialog: () => ipcRenderer.invoke('open-file-dialog'),
   loadSettings: () => ipcRenderer.invoke('load-settings'),
   saveSettings: (data) => ipcRenderer.invoke('save-settings', data),

@@ -30,11 +30,12 @@ export default function App() {
         </nav>
       </header>
 
-      {tab === 'upload' ? (
+      <div className={tab === 'upload' ? 'tab-pane' : 'tab-pane hidden'}>
         <UploadTab settings={settings} saveSettings={saveSettings} />
-      ) : (
+      </div>
+      <div className={tab === 'automate' ? 'tab-pane' : 'tab-pane hidden'}>
         <AutomateTab settings={settings} saveSettings={saveSettings} />
-      )}
+      </div>
     </div>
   )
 }

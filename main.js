@@ -27,6 +27,37 @@ function slugify(str) {
   return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
+function doHttpHead(url) {
+  return new Promise((resolve) => {
+    let parsedUrl
+    try { parsedUrl = new URL(url) }
+    catch { return resolve({ ok: false, error: 'Invalid URL' }) }
+
+    const isHttps = parsedUrl.protocol === 'https:'
+    const protocol = isHttps ? https : http
+    const options = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (isHttps ? 443 : 80),
+      path: parsedUrl.pathname || '/',
+      method: 'HEAD',
+    }
+    const req = protocol.request(options, (res) => resolve({ ok: true, status: res.statusCode }))
+    req.on('error', (err) => resolve({ ok: false, error: err.message }))
+    req.setTimeout(8000, () => { req.destroy(); resolve({ ok: false, error: 'Connection timed out' }) })
+    req.end()
+  })
+}
+
+function injectRedirectHtml(html, url, delay) {
+  const meta = `<meta http-equiv="refresh" content="${delay};url=${url}">`
+  const script = delay > 0
+    ? `<script>setTimeout(function(){window.location.replace("${url}")},${delay * 1000})</script>`
+    : `<script>window.location.replace("${url}")</script>`
+  const block = `\n    ${meta}\n    ${script}`
+  if (html.includes('</head>')) return html.replace('</head>', block + '\n</head>')
+  return block + '\n' + html
+}
+
 function doHttpPut(url, body, contentType) {
   return new Promise((resolve) => {
     let parsedUrl
@@ -110,7 +141,19 @@ ipcMain.handle('open-file-dialog', async () => {
   return { path: filePath, name: filePath.split(/[\\/]/).pop(), size: stats.size }
 })
 
-ipcMain.handle('upload', async (_, { url, content, contentType, isFile, filePath }) => {
+ipcMain.handle('test-connection', async (_, bucketUrl) => {
+  const headResult = await doHttpHead(bucketUrl.replace(/\/$/, ''))
+  if (!headResult.ok) {
+    return { reachable: false, writable: false, error: headResult.error || 'Cannot reach bucket URL' }
+  }
+  const testUrl = `${bucketUrl.replace(/\/$/, '')}/_s3uploader_test.txt`
+  const putResult = await doHttpPut(testUrl, Buffer.from('s3uploader-test', 'utf8'), 'text/plain')
+  if (putResult.success) return { reachable: true, writable: true }
+  if (putResult.status === 403) return { reachable: true, writable: false, error: 'Access Denied — bucket does not allow public writes' }
+  return { reachable: true, writable: false, error: `Write test failed (HTTP ${putResult.status || 'error'})` }
+})
+
+ipcMain.handle('upload', async (_, { url, content, contentType, isFile, filePath, redirect }) => {
   let body
   if (isFile) {
     try { body = fs.readFileSync(filePath) }
@@ -118,10 +161,13 @@ ipcMain.handle('upload', async (_, { url, content, contentType, isFile, filePath
   } else {
     body = Buffer.from(content, 'utf8')
   }
+  if (redirect?.enabled && redirect?.url && contentType === 'text/html') {
+    body = Buffer.from(injectRedirectHtml(body.toString('utf8'), redirect.url, redirect.delay || 0), 'utf8')
+  }
   return doHttpPut(url, body, contentType)
 })
 
-ipcMain.handle('start-automation', async (event, { bucketUrl, slugPattern, templateHtml, keywords, count, intervalMin }) => {
+ipcMain.handle('start-automation', async (event, { bucketUrl, slugPattern, templateHtml, keywords, count, intervalMin, redirect }) => {
   if (automationTimer) return { error: 'Automation is already running' }
 
   const win = BrowserWindow.fromWebContents(event.sender)
@@ -142,9 +188,13 @@ ipcMain.handle('start-automation', async (event, { bucketUrl, slugPattern, templ
       .replace(/\{keyword\}/g, slugify(keyword))
       .replace(/\{random\}/g, random)
 
-    const html = templateHtml
+    let html = templateHtml
       .replace(/\{keyword\}/g, keyword)
       .replace(/\{random\}/g, random)
+
+    if (redirect?.enabled && redirect?.url) {
+      html = injectRedirectHtml(html, redirect.url, redirect.delay || 0)
+    }
 
     const url = `${bucketUrl.replace(/\/$/, '')}/${slug}`
     const result = await doHttpPut(url, Buffer.from(html, 'utf8'), 'text/html')
