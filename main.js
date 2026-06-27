@@ -167,7 +167,7 @@ ipcMain.handle('upload', async (_, { url, content, contentType, isFile, filePath
   return doHttpPut(url, body, contentType)
 })
 
-ipcMain.handle('start-automation', async (event, { bucketUrl, slugPattern, templateHtml, keywords, count, intervalMin, redirect }) => {
+ipcMain.handle('start-automation', async (event, { bucketUrl, slugPattern, templateHtml, keywords, count, intervalSec, redirect }) => {
   if (automationTimer) return { error: 'Automation is already running' }
 
   const win = BrowserWindow.fromWebContents(event.sender)
@@ -214,7 +214,7 @@ ipcMain.handle('start-automation', async (event, { bucketUrl, slugPattern, templ
 
   await runOne()
   if (uploaded < count) {
-    automationTimer = setInterval(runOne, intervalMin * 60 * 1000)
+    automationTimer = setInterval(runOne, intervalSec * 1000)
   }
   return { started: true }
 })

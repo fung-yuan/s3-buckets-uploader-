@@ -20,7 +20,7 @@ export default function AutomateTab({ settings, saveSettings }) {
   const [templateHtml, setTemplateHtml] = useState(DEFAULT_TEMPLATE)
   const [keywords, setKeywords] = useState('nail guide\nnail art\nacrylic nails')
   const [count, setCount] = useState(5)
-  const [intervalMin, setIntervalMin] = useState(60)
+  const [intervalSec, setIntervalSec] = useState(30)
   const [running, setRunning] = useState(false)
   const [log, setLog] = useState([])
   const logRef = useRef(null)
@@ -60,9 +60,10 @@ export default function AutomateTab({ settings, saveSettings }) {
 
   const estimatedDuration = () => {
     const n = parseInt(count) || 1
-    const mins = (parseFloat(intervalMin) || 1) * (n - 1)
-    if (mins < 60) return `~${Math.round(mins)} min`
-    return `~${(mins / 60).toFixed(1)} hrs`
+    const secs = (parseFloat(intervalSec) || 1) * (n - 1)
+    if (secs < 60) return `~${Math.round(secs)} sec`
+    if (secs < 3600) return `~${(secs / 60).toFixed(1)} min`
+    return `~${(secs / 3600).toFixed(1)} hrs`
   }
 
   const handleTestConnection = async () => {
@@ -89,7 +90,7 @@ export default function AutomateTab({ settings, saveSettings }) {
       templateHtml,
       keywords: kwList,
       count: parseInt(count) || 1,
-      intervalMin: parseFloat(intervalMin) || 1,
+      intervalSec: parseFloat(intervalSec) || 1,
       redirect,
     })
     if (result?.error) {
@@ -184,13 +185,13 @@ export default function AutomateTab({ settings, saveSettings }) {
                 />
               </div>
               <div className="field grow">
-                <label>INTERVAL (minutes)</label>
+                <label>INTERVAL (seconds)</label>
                 <input
                   type="number"
-                  min="0.1"
-                  step="0.1"
-                  value={intervalMin}
-                  onChange={(e) => setIntervalMin(e.target.value)}
+                  min="1"
+                  step="1"
+                  value={intervalSec}
+                  onChange={(e) => setIntervalSec(e.target.value)}
                 />
               </div>
             </div>
