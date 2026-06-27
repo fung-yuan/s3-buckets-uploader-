@@ -35,7 +35,7 @@
     },
     "mac": {
       "target": "dmg",
-      "icon": null
+      "category": "public.app-category.utilities"
     },
     "dmg": {
       "writeUpdateInfo": false

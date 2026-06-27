@@ -7,14 +7,14 @@ on:
 
 jobs:
   build-mac:
-    runs-on: macos-latest
+    runs-on: macos-13
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Install dependencies
         run: npm install
@@ -23,13 +23,14 @@ jobs:
         run: npm run build:renderer
 
       - name: Build macOS DMG
-        run: npx electron-builder --mac --x64
+        run: npx electron-builder --mac dmg --x64
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: S3-Uploader-macOS
-          path: release/*.dmg
+          path: release/**/*.dmg
           retention-days: 30
