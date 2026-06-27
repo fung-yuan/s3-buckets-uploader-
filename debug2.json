@@ -1,0 +1,4 @@
+{
+  "electron": "string",
+  "electronMain_err": "Cannot find module 'electron/main'\nRequire stack:\n- C:\\Users\\dell\\Downloads\\s3-uploader\\test4.js"
+}

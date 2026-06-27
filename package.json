@@ -1,0 +1,57 @@
+{
+  "name": "s3-uploader",
+  "version": "1.0.0",
+  "description": "S3 bucket file uploader desktop app",
+  "main": "main.js",
+  "scripts": {
+    "dev:renderer": "vite",
+    "dev": "concurrently \"npm run dev:renderer\" \"wait-on http://localhost:3700 && node electron-launcher.js\"",
+    "build:renderer": "vite build",
+    "start": "node electron-launcher.js",
+    "dist": "npm run build:renderer && electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.s3uploader.app",
+    "productName": "S3 Uploader",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "preload.js",
+      "electron-launcher.js",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": null
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": true
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": null
+    },
+    "dmg": {
+      "writeUpdateInfo": false
+    }
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.0",
+    "concurrently": "^9.0.0",
+    "cross-env": "^10.1.0",
+    "electron": "^26.6.10",
+    "electron-builder": "^26.15.3",
+    "vite": "^5.0.0",
+    "wait-on": "^8.0.0"
+  },
+  "dependencies": {
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  }
+}

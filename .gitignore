@@ -1,0 +1,7 @@
+node_modules/
+dist/
+release/
+out/
+C:/s3-build/
+*.log
+.DS_Store
